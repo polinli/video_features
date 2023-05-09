@@ -4,10 +4,10 @@ stack_size: 16 # Feature time span in frames
 step_size: 4 # Feature step size in frames
 streams: null # Streams to use for feature extraction (e.g. 'rgb' or 'flow'). Both used if left as "null" (None)
 flow_type: 'raft' # Flow to use in I3D. 'pwc' (PWCNet) is faster while 'raft' (RAFT) is more accurate.
-extraction_fps: null # For original video fps, leave as "null" (None)
+extraction_fps: 30 # For original video fps, leave as "null" (None)
 
 # Extraction Parameters
-video_type: 'video' # 'video' or 'frames'
+video_type: 'frames' # 'video' or 'frames'
 device: 'cuda:0'  # device as in `torch`, can be 'cpu'
 on_extraction: 'save_numpy'  # what to do once the features are extracted. Can be ['print', 'save_numpy', 'save_pickle']
 output_path: './output' # where to store results if saved
@@ -20,4 +20,4 @@ config: null
 
 # Video paths
 video_paths: null
-file_with_video_paths: null # if the list of videos is large, you might put them in a txt file, use this argument to specify the path
+file_with_video_paths: ./video_paths.txt # if the list of videos is large, you might put them in a txt file, use this argument to specify the path
