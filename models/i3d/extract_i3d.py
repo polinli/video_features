@@ -1,4 +1,6 @@
 import os
+import logging
+
 from typing import Dict
 
 import cv2
@@ -31,6 +33,7 @@ class ExtractI3D(BaseExtractor):
         )
         # (Re-)Define arguments for this class
         self.streams = ['rgb', 'flow'] if args.streams is None else [args.streams]
+        self.video_type = args.video_type
         self.flow_type = args.flow_type
         self.i3d_classes_num = 400
         self.min_side_size = 256
@@ -61,6 +64,9 @@ class ExtractI3D(BaseExtractor):
         self.show_pred = args.show_pred
         self.output_feat_keys = self.streams + ['fps', 'timestamps_ms']
         self.name2module = self.load_model()
+        self.logger = logging.getLogger("extract_I3D")
+        self.logger.setLevel(logging.INFO)
+        self.logger.addHandler(logging.StreamHandler())
 
     @torch.no_grad()
     def extract(self, video_path: str) -> Dict[str, np.ndarray]:
@@ -128,6 +134,62 @@ class ExtractI3D(BaseExtractor):
         # removes the video with different fps if it was created to preserve disk space
         if (self.extraction_fps is not None) and (not self.keep_tmp_files):
             os.remove(video_path)
+
+        # transforms list of features into a np array
+        feats_dict = {stream: np.array(feats) for stream, feats in feats_dict.items()}
+        # also include the timestamps and fps
+        feats_dict['fps'] = np.array(fps)
+        feats_dict['timestamps_ms'] = np.array(timestamps_ms)
+
+        return feats_dict
+
+    @torch.no_grad()
+    def extract_frames(self, frames_folder: str) -> Dict[str, np.ndarray]:
+        # this function is modified from extract() to extract features from frames
+        """The extraction call. Made to clean the forward call a bit.
+        Arguments:
+            frames_folder (str): a folder path containing video frames (RGB images) from which to extract features
+        Returns:
+            Dict[str, np.ndarray]: feature name (e.g. 'fps' or feature_type) to the feature tensor
+        """
+        #self.logger.info("Now running extract_frames()")
+
+        fps = self.extraction_fps
+        timestamps_ms = []
+        rgb_stack = []
+        feats_dict = {stream: [] for stream in self.streams}
+
+        image_files = sorted(os.listdir(frames_folder))
+        self.logger.info(f"Found {format(len(image_files))} image files in the folder {frames_folder}")
+
+        padder = None
+        stack_counter = 0
+        for idx, image_file in enumerate(image_files):
+            #self.logger.info("Now processing image file: {}".format(image_file))
+            image_path = os.path.join(frames_folder, image_file)
+            rgb = cv2.imread(image_path)
+            
+            # preprocess the image
+            rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
+            rgb = self.resize_transforms(rgb)
+            rgb = rgb.unsqueeze(0)
+
+            if self.flow_type == 'raft' and padder is None:
+                padder = InputPadder(rgb.shape)
+
+            rgb_stack.append(rgb)
+
+            # - 1 is used because we need B+1 frames to calculate B frames
+            if len(rgb_stack) - 1 == self.stack_size:
+                batch_feats_dict = self.run_on_a_stack(rgb_stack, stack_counter, padder)
+                for stream in self.streams:
+                    feats_dict[stream].extend(batch_feats_dict[stream].tolist())
+                # leaving the elements if step_size < stack_size so they will not be loaded again
+                # if step_size == stack_size one element is left because the flow between the last element
+                # in the prev list and the first element in the current list
+                rgb_stack = rgb_stack[self.step_size:]
+                stack_counter += 1
+                timestamps_ms.append(idx * (1000 / fps))  # Calculate timestamps_ms assuming constant frame rate
 
         # transforms list of features into a np array
         feats_dict = {stream: np.array(feats) for stream, feats in feats_dict.items()}

@@ -52,6 +52,32 @@ class BaseExtractor(object):
             traceback.print_exc()  # prints the error
             print('Continuing...')
 
+    def _extract_frames(self, video_path: str):
+        """A wrapper around self.extract. It handles exceptions, checks if files already exist and saves
+        the extracted files if a user desires.
+
+        Args:
+            video_path (str): a video path from which to extract features
+
+        Raises:
+            KeyboardInterrupt: when an error occurs, the script will continue with the rest of the videos.
+                               If a user wants to kill it, ^C (KB interrupt) should be used.
+        """
+        # the try and except structure is used to continue extraction even if after an error (a few bad vids)
+        try:
+            # skips a video path if already exists
+            if not self.is_already_exist(video_path):
+                # extracts features for a video path (this should be implemented by the child modules)
+                feats_dict = self.extract_frames(video_path)
+                # either prints or saves to numpy/pickle
+                self.action_on_extraction(feats_dict, video_path)
+        except KeyboardInterrupt:
+            raise KeyboardInterrupt
+        except:
+            print(f'An error occurred during extraction from: {video_path}:')
+            traceback.print_exc()  # prints the error
+            print('Continuing...')
+
     def action_on_extraction(
             self,
             feats_dict: Dict[str, np.ndarray],

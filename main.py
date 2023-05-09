@@ -5,10 +5,13 @@ from utils.utils import build_cfg_path, form_list_from_user_input, sanity_check
 
 
 def main(args_cli):
-    # config
+    # load config acoording to the feature type
     args_yml = OmegaConf.load(build_cfg_path(args_cli.feature_type))
+    # merge the config from the yml file and the command line arguments
     args = OmegaConf.merge(args_yml, args_cli)  # the latter arguments are prioritized
     # OmegaConf.set_readonly(args, True)
+
+    # checks user arguments for correctness and consistency
     sanity_check(args)
 
     # verbosing with the print -- haha (TODO: logging)
@@ -45,7 +48,14 @@ def main(args_cli):
     print(f'The number of specified videos: {len(video_paths)}')
 
     for video_path in tqdm(video_paths):
-        extractor._extract(video_path)  # note the `_` in the method name
+        print(f"Extracting from {video_path}")
+
+        if args.video_type == 'video':
+            extractor._extract(video_path)  # note the `_` in the method name
+        elif args.video_type == 'frames':
+            print("Extracting from frames")
+            frames_folder = video_path
+            extractor._extract_frames(frames_folder)
 
     # yep, it is this simple!
 
